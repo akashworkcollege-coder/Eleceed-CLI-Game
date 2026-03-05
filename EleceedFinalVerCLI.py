@@ -198,8 +198,8 @@ class Kartein(Character):
                    "desc": "REQUIRES DUAL WINGS. Massive damage AND heals party!"},
             '15': {"name": "🛡️ Reactive Reformation", "cost": 25, "dmg": (0, 0), "mode": "any", "type": "utility",
                    "desc": "Reinforces cells. Reduces next physical damage by 70%."},
-            '16': {"name": "☠️ Entropic Ward", "cost": 30, "dmg": (20, 40), "mode": "any", "type": "utility",
-                   "desc": "Contact field of decay. Attackers take damage."},
+            '16': {"name": "☠️ Entropic Ward", "cost": 30, "mode": "any", "type": "utility",
+                   "desc": "Contact field of decay. Attackers take 20-40 damage (reactive counter only)."},
             '17': {"name": "🔒 Power Seal", "cost": 50, "dmg": (0, 0), "mode": "any", "type": "utility",
                    "desc": "70% chance to seal enemy abilities."},
             '18': {"name": "🔮 Dimensional Isolation", "cost": 55, "dmg": (0, 0), "mode": "any", "type": "utility",
@@ -265,16 +265,16 @@ class Pluton(Character):
                   "desc": "Dense singular point of extreme gravitational force."},
             '3': {"name": "🛡️ Gravity Shield", "cost": 25, "dmg": (0, 0), "type": "utility",
                   "desc": "Defensive field of warped space-time. -60% damage."},
-            '4': {"name": "🌋 Crushing Field", "cost": 45, "dmg": (40, 60), "type": "damage",
+            '4': {"name": "🌋 Crushing Field", "cost": 45, "dmg": (0, 0), "type": "utility",
                   "desc": "Dominates battlefield. Increases gravity over vast zone. Slows all enemies."},
             '5': {"name": "🌀 Event Horizon", "cost": 75, "dmg": (110, 160), "type": "damage",
                   "desc": "Zone of profound gravitational distortion. Point of no return."},
-            '6': {"name": "⚓ Anchor Point", "cost": 20, "dmg": (30, 45), "type": "damage",
+            '6': {"name": "⚓ Anchor Point", "cost": 20, "dmg": (0, 0), "type": "utility",
                   "desc": "Designates fixed gravitational pull. Disrupts mobility."},
             '7': {"name": "🔄 Kinetic Redirection", "cost": 25, "dmg": (0, 0), "type": "utility",
                   "desc": "Alters gravity vectors. Reflects 70% damage."},
             '8': {"name": "✨ Gravitational Lensing", "cost": 20, "dmg": (0, 0), "type": "utility",
-                  "desc": "Bends light and energy waves. Scrambles perception."},
+                  "desc": "Bends light and energy waves. Scrambles perception. Enemies have 50% miss chance for 1 hit."},
             '9': {"name": "⚖️ Personal Gravity Well", "cost": 15, "dmg": (0, 0), "type": "utility",
                   "desc": "Ever-present subtle manipulation. Immovable stance. +20% damage."},
         }
@@ -909,6 +909,11 @@ class Game:
                         continue
                     if abil["name"] == "🐱 Cat Punch" and not character.cat_form:
                         continue
+                if character.name == "Pluton":
+                    if abil["name"] == "⚖️ Personal Gravity Well" and character.well_active:
+                        continue
+                    if abil["name"] == "🌋 Crushing Field" and character.field_active:
+                        continue
                 available[key] = abil
 
         print("\n" + "📋 AVAILABLE ABILITIES:")
@@ -917,7 +922,12 @@ class Game:
 
         for key in sorted(available.keys(), key=lambda x: int(x) if x.isdigit() else x):
             abil = available[key]
-            if "dmg" in abil and abil["dmg"] != (0, 0):
+            if "dmg" in abil and abil["dmg"] != (0, 0) and "heal" in abil:
+                d = abil["dmg"]
+                h = abil["heal"]
+                domain_icon = "🏰 " if "type" in abil and abil["type"] == "domain" else ""
+                print(f"  {key}. {domain_icon}{abil['name']:35} | {abil['cost']}E | {d[0]}-{d[1]} DMG / {h[0]}-{h[1]} HEAL")
+            elif "dmg" in abil and abil["dmg"] != (0, 0):
                 d = abil["dmg"]
                 domain_icon = "🏰 " if "type" in abil and abil["type"] == "domain" else ""
                 print(f"  {key}. {domain_icon}{abil['name']:35} | {abil['cost']}E | {d[0]}-{d[1]} DMG")
@@ -1026,11 +1036,23 @@ class Game:
 
             # WING MANIFEST
             elif "type" in ability and ability["type"] == "wing_manifest":
-                if "Angel" in ability["name"]:
+                wing_map = {"Angel": "angel", "Demon": "demon", "Dual": "dual"}
+                new_wing = next((v for k, v in wing_map.items() if k in ability["name"]), None)
+                if new_wing and character.wing_state not in ["none", new_wing]:
+                    old = character.wing_state.upper()
+                    print(f"\n⚠️  WARNING: You have {old} WINGS active!")
+                    print(f"   Switching will LOSE your current wings and their unlocked abilities.")
+                    print(f"   Confirm? (y/n)")
+                    confirm = input("> ").strip().lower()
+                    if confirm != 'y':
+                        self.add_log("Wing manifestation cancelled.")
+                        time.sleep(ACTION_DELAY)
+                        return True
+                if new_wing == "angel":
                     self.add_log(character.set_wings("angel"))
-                elif "Demon" in ability["name"]:
+                elif new_wing == "demon":
                     self.add_log(character.set_wings("demon"))
-                elif "Dual" in ability["name"]:
+                elif new_wing == "dual":
                     self.add_log(character.set_wings("dual"))
 
             # DEMON ABILITIES
@@ -1064,7 +1086,7 @@ class Game:
                     target.take_damage(dmg)
                     self.add_log(f"🦋✨🦋✨ DUAL WINGS JUDGMENT! {target.name} takes {dmg} damage!")
                     for ally in self.party:
-                        if ally.is_alive() and ally != character:
+                        if ally.is_alive():
                             heal = random.randint(ability["heal"][0], ability["heal"][1])
                             ally.heal(heal)
                             self.add_log(f"  ✨ {ally.name} healed for {heal} HP!")
@@ -1155,8 +1177,13 @@ class Game:
             time.sleep(0.5)
             return
         if enemy.ai_pattern:
-            key = enemy.ai_pattern[self.turn_count % len(enemy.ai_pattern)]
+            key = enemy.ai_pattern[(self.turn_count - 1) % len(enemy.ai_pattern)]
             abil = enemy.abilities.get(key, list(enemy.abilities.values())[0])
+            # If this is a 0-dmg flavor ability, show a message and skip damage
+            if abil["dmg"] == (0, 0):
+                self.add_log(f"✨ {enemy.name} uses {abil['name']}! [Preparing next move...]")
+                time.sleep(0.8)
+                return
             targets = [c for c in self.party if c.is_alive()]
             if targets:
                 t = random.choice(targets)
@@ -1173,6 +1200,22 @@ class Game:
                     enemy.take_damage(reflect)
                     self.add_log(f"🔄 Pluton reflects {reflect} damage back at {enemy.name}!")
                     t.buffs.remove("reflect")
+                elif "lensing" in t.buffs:
+                    if random.random() < 0.5:
+                        self.add_log(f"✨ GRAVITATIONAL LENSING! {enemy.name}'s attack bends away and misses {t.name}!")
+                    else:
+                        self.add_log(f"✨ Lensing flickered — {enemy.name}'s attack breaks through!")
+                        if "reactive_armor" in t.buffs:
+                            dmg = int(dmg * 0.3)
+                            self.add_log(f"🛡️ Reactive Reformation! Damage reduced to {dmg}!")
+                            t.buffs.remove("reactive_armor")
+                        t.take_damage(dmg)
+                        if self.kartein.entropic_ward_active and t.name == "Kartein":
+                            counter = random.randint(15, 25)
+                            enemy.take_damage(counter)
+                            self.add_log(f"☠️ Entropic Ward! {enemy.name} takes {counter} damage!")
+                        self.add_log(f"{enemy.name} uses {abil['name']} for {dmg} damage!")
+                    t.buffs.remove("lensing")
                 else:
                     if "reactive_armor" in t.buffs:
                         dmg = int(dmg * 0.3)
@@ -1825,6 +1868,9 @@ def main():
     time.sleep(1)
 
     game = Game()
+    cumulative_victories = 0
+    cumulative_kills = 0
+    best_survival_score = 0
 
     while True:
         print("\n" + "-" * 110)
@@ -1847,30 +1893,45 @@ def main():
         if choice == "1":
             game = Game()
             game.story_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
         elif choice == "2":
             game = Game()
             game.gauntlet_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
         elif choice == "3":
             game = Game()
             game.boss_rush_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
         elif choice == "4":
             game = Game()
-            game.survival_mode()
+            score = game.survival_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
+            if score > best_survival_score:
+                best_survival_score = score
         elif choice == "5":
             game = Game()
             game.frame_raid_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
         elif choice == "6":
             game = Game()
             game.top10_tournament_mode()
+            cumulative_victories += game.victories
+            cumulative_kills += game.total_kills
         elif choice == "7":
             game.sparring_mode()
         elif choice == "8":
             print("\n" + "=" * 110)
             print("📊 STATS & RECORDS")
             print("=" * 110)
-            print(f"🏆 Total victories: {game.victories}")
-            print(f"💀 Enemies defeated: {game.total_kills}")
-            print("\n✦ PARTY STATUS:")
+            print(f"🏆 Total victories (all sessions): {cumulative_victories}")
+            print(f"💀 Enemies defeated (all sessions): {cumulative_kills}")
+            print(f"🔥 Best Survival Score: {best_survival_score}")
+            print("\n✦ LAST PARTY STATUS:")
             print(f"   ⚡ Kayden Break - {game.kayden.hp}/{game.kayden.max_hp} HP")
             print(f"   💚 Kartein - {game.kartein.hp}/{game.kartein.max_hp} HP")
             print(f"   ⚖️ Pluton - {game.pluton.hp}/{game.pluton.max_hp} HP")
