@@ -9,7 +9,7 @@ import random
 import time
 import sys
 from enum import Enum
-
+#Final version
 # ============================================================================
 # TEXT SPEED CONTROL
 # ============================================================================
