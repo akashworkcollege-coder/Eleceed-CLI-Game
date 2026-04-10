@@ -1778,3 +1778,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\nGame interrupted. Thanks for playing!")
         sys.exit(0)
+
